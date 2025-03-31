@@ -229,7 +229,8 @@ class AbletonMCP(ControlSurface):
             elif command_type in ["create_midi_track", "set_track_name", 
                                  "create_clip", "add_notes_to_clip", "set_clip_name", 
                                  "set_tempo", "fire_clip", "stop_clip",
-                                 "start_playback", "stop_playback", "load_browser_item"]:
+                                 "start_playback", "stop_playback", "load_browser_item",
+                                 "get_device_parameter", "set_device_parameter"]:
                 # Use a thread-safe approach with a response queue
                 response_queue = queue.Queue()
                 
@@ -282,6 +283,17 @@ class AbletonMCP(ControlSurface):
                             track_index = params.get("track_index", 0)
                             item_uri = params.get("item_uri", "")
                             result = self._load_browser_item(track_index, item_uri)
+                        elif command_type == "get_device_parameter":
+                            track_index = params.get("track_index", 0)
+                            device_index = params.get("device_index", 0)
+                            parameter_name = params.get("parameter_name", "")
+                            result = self._get_device_parameter(track_index, device_index, parameter_name)
+                        elif command_type == "set_device_parameter":
+                            track_index = params.get("track_index", 0)
+                            device_index = params.get("device_index", 0)
+                            parameter_name = params.get("parameter_name", "")
+                            value = params.get("value", 0.0)
+                            result = self._set_device_parameter(track_index, device_index, parameter_name, value)
                         
                         # Put the result in the queue
                         response_queue.put({"status": "success", "result": result})
@@ -395,7 +407,20 @@ class AbletonMCP(ControlSurface):
                     "class_name": device.class_name,
                     "type": self._get_device_type(device)
                 })
-            
+
+            # Get device parameters
+            device_parameters = []
+            for device in track.devices:
+                for parameter in device.parameters:
+                    device_parameters.append({
+                        "name": parameter.name,
+                        "value": parameter.value,
+                        "min": parameter.min,
+                        "max": parameter.max,
+                        "default": parameter.default,
+                        "unit": parameter.unit
+                    })
+
             result = {
                 "index": track_index,
                 "name": track.name,
@@ -407,7 +432,8 @@ class AbletonMCP(ControlSurface):
                 "volume": track.mixer_device.volume.value,
                 "panning": track.mixer_device.panning.value,
                 "clip_slots": clip_slots,
-                "devices": devices
+                "devices": devices,
+                "device_parameters": device_parameters
             }
             return result
         except Exception as e:
@@ -798,6 +824,64 @@ class AbletonMCP(ControlSurface):
         except Exception as e:
             self.log_message("Error finding browser item by URI: {0}".format(str(e)))
             return None
+
+    def _get_device_parameter(self, track_index, device_index, parameter_name):
+        """Get the value of a device parameter"""
+        try:
+            if track_index < 0 or track_index >= len(self._song.tracks):
+                raise IndexError("Track index out of range")
+
+            track = self._song.tracks[track_index]
+
+            if device_index < 0 or device_index >= len(track.devices):
+                raise IndexError("Device index out of range")
+
+            device = track.devices[device_index]
+
+            if parameter_name not in device.parameters:
+                raise ValueError("Parameter '{0}' not found on device".format(parameter_name))
+
+            value = device.parameters[parameter_name].value
+
+            result = {
+                "parameter_name": parameter_name,
+                "value": value,
+                "min": device.parameters[parameter_name].min,
+                "max": device.parameters[parameter_name].max,
+                "default": device.parameters[parameter_name].default,
+                "unit": device.parameters[parameter_name].unit
+            }
+            return result
+        except Exception as e:
+            self.log_message("Error getting device parameter: {0}".format(str(e)))
+            raise
+        
+    def _set_device_parameter(self, track_index, device_index, parameter_name, value):  
+        """Set the value of a device parameter"""
+        try:
+            if track_index < 0 or track_index >= len(self._song.tracks):
+                raise IndexError("Track index out of range")
+
+            track = self._song.tracks[track_index]
+
+            if device_index < 0 or device_index >= len(track.devices):
+                raise IndexError("Device index out of range")
+
+            device = track.devices[device_index]
+
+            if parameter_name not in device.parameters:
+                raise ValueError("Parameter '{0}' not found on device".format(parameter_name))
+
+            device.parameters[parameter_name].value = value
+
+            result = {
+                "parameter_name": parameter_name,
+                "value": value
+            }
+            return result
+        except Exception as e:
+            self.log_message("Error setting device parameter: {0}".format(str(e)))
+            raise
     
     # Helper methods
     

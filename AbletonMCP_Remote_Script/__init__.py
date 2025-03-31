@@ -230,7 +230,7 @@ class AbletonMCP(ControlSurface):
                                  "create_clip", "add_notes_to_clip", "set_clip_name", 
                                  "set_tempo", "fire_clip", "stop_clip",
                                  "start_playback", "stop_playback", "load_browser_item",
-                                 "get_device_parameter", "set_device_parameter"]:
+                                 "get_parameter_value", "set_parameter_value"]:
                 # Use a thread-safe approach with a response queue
                 response_queue = queue.Queue()
                 
@@ -283,17 +283,17 @@ class AbletonMCP(ControlSurface):
                             track_index = params.get("track_index", 0)
                             item_uri = params.get("item_uri", "")
                             result = self._load_browser_item(track_index, item_uri)
-                        elif command_type == "get_device_parameter":
+                        elif command_type == "get_parameter_value":
                             track_index = params.get("track_index", 0)
                             device_index = params.get("device_index", 0)
                             parameter_name = params.get("parameter_name", "")
-                            result = self._get_device_parameter(track_index, device_index, parameter_name)
-                        elif command_type == "set_device_parameter":
+                            result = self._get_parameter_value(track_index, device_index, parameter_name)
+                        elif command_type == "set_parameter_value":
                             track_index = params.get("track_index", 0)
                             device_index = params.get("device_index", 0)
                             parameter_name = params.get("parameter_name", "")
                             value = params.get("value", 0.0)
-                            result = self._set_device_parameter(track_index, device_index, parameter_name, value)
+                            result = self._set_parameter_value(track_index, device_index, parameter_name, value)
                         
                         # Put the result in the queue
                         response_queue.put({"status": "success", "result": result})
@@ -825,7 +825,7 @@ class AbletonMCP(ControlSurface):
             self.log_message("Error finding browser item by URI: {0}".format(str(e)))
             return None
 
-    def _get_device_parameter(self, track_index, device_index, parameter_name):
+    def _get_parameter_value(self, track_index, device_index, parameter_name):
         """Get the value of a device parameter"""
         try:
             if track_index < 0 or track_index >= len(self._song.tracks):
@@ -856,7 +856,7 @@ class AbletonMCP(ControlSurface):
             self.log_message("Error getting device parameter: {0}".format(str(e)))
             raise
         
-    def _set_device_parameter(self, track_index, device_index, parameter_name, value):  
+    def _set_parameter_value(self, track_index, device_index, parameter_name, value):  
         """Set the value of a device parameter"""
         try:
             if track_index < 0 or track_index >= len(self._song.tracks):

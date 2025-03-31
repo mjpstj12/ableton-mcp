@@ -104,7 +104,7 @@ class AbletonConnection:
         is_modifying_command = command_type in [
             "create_midi_track", "create_audio_track", "set_track_name",
             "create_clip", "add_notes_to_clip", "set_clip_name",
-            "set_tempo", "fire_clip", "stop_clip", "get_device_parameter", "set_device_parameter",
+            "set_tempo", "fire_clip", "stop_clip", "get_parameter_value", "set_parameter_value",
             "start_playback", "stop_playback", "load_instrument_or_effect"
         ]
         
@@ -438,30 +438,30 @@ def load_instrument_or_effect(ctx: Context, track_index: int, uri: str) -> str:
         return f"Error loading instrument by URI: {str(e)}"
 
 @mcp.tool() 
-def get_device_parameter(ctx: Context, track_index: int, device_index: int, parameter_name: str) -> str:
+def get_parameter_value(ctx: Context, track_index: int, device_index: int, parameter_name: str) -> str:
     """
     Get the value of a device parameter.
     """
     try:
         ableton = get_ableton_connection()
-        result = ableton.send_command("get_device_parameter", {
+        result = ableton.send_command("get_parameter_value", {
             "track_index": track_index,
             "device_index": device_index,
             "parameter_name": parameter_name
         })  
         return f"Device parameter {parameter_name} on track {track_index}, device {device_index} has value {result.get('value', 'unknown')}"
     except Exception as e:
-        logger.error(f"Error getting device parameter: {str(e)}")
-        return f"Error getting device parameter: {str(e)}"
+        logger.error(f"Error getting parameter value: {str(e)}")
+        return f"Error getting parameter value: {str(e)}"
     
 @mcp.tool()
-def set_device_parameter(ctx: Context, track_index: int, device_index: int, parameter_name: str, value: float) -> str:
+def set_parameter_value(ctx: Context, track_index: int, device_index: int, parameter_name: str, value: float) -> str:
     """
     Set the value of a device parameter.
     """
     try:
         ableton = get_ableton_connection()
-        result = ableton.send_command("set_device_parameter", {
+        result = ableton.send_command("set_parameter_value", {
             "track_index": track_index,
             "device_index": device_index,
             "parameter_name": parameter_name,
@@ -469,8 +469,8 @@ def set_device_parameter(ctx: Context, track_index: int, device_index: int, para
         })  
         return f"Set device parameter {parameter_name} to {value}"
     except Exception as e:
-        logger.error(f"Error setting device parameter: {str(e)}")
-        return f"Error setting device parameter: {str(e)}"
+        logger.error(f"Error setting parameter value: {str(e)}")
+        return f"Error setting parameter value: {str(e)}"
 
 @mcp.tool()
 def fire_clip(ctx: Context, track_index: int, clip_index: int) -> str:

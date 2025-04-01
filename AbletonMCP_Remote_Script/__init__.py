@@ -225,12 +225,18 @@ class AbletonMCP(ControlSurface):
             elif command_type == "get_track_info":
                 track_index = params.get("track_index", 0)
                 response["result"] = self._get_track_info(track_index)
+            elif command_type == "get_parameter_value":
+                track_index = params.get("track_index", 0)
+                device_index = params.get("device_index", 0)
+                parameter_index = params.get("parameter_index", 0)
+                response["result"] = self._get_parameter_value(track_index, device_index, parameter_index)
+            
             # Commands that modify Live's state should be scheduled on the main thread
             elif command_type in ["create_midi_track", "set_track_name", 
                                  "create_clip", "add_notes_to_clip", "set_clip_name", 
                                  "set_tempo", "fire_clip", "stop_clip",
-                                 "start_playback", "stop_playback", "load_browser_item",
-                                 "get_parameter_value", "set_parameter_value"]:
+                                 "start_playback", "stop_playback", 
+                                 "load_instrument_or_effect", "load_browser_item", "set_parameter_value"]:
                 # Use a thread-safe approach with a response queue
                 response_queue = queue.Queue()
                 
@@ -283,17 +289,12 @@ class AbletonMCP(ControlSurface):
                             track_index = params.get("track_index", 0)
                             item_uri = params.get("item_uri", "")
                             result = self._load_browser_item(track_index, item_uri)
-                        elif command_type == "get_parameter_value":
-                            track_index = params.get("track_index", 0)
-                            device_index = params.get("device_index", 0)
-                            parameter_name = params.get("parameter_name", "")
-                            result = self._get_parameter_value(track_index, device_index, parameter_name)
                         elif command_type == "set_parameter_value":
                             track_index = params.get("track_index", 0)
                             device_index = params.get("device_index", 0)
-                            parameter_name = params.get("parameter_name", "")
-                            value = params.get("value", 0.0)
-                            result = self._set_parameter_value(track_index, device_index, parameter_name, value)
+                            parameter_index = params.get("parameter_index", 0)
+                            value = params.get("value", 0)
+                            result = self._set_parameter_value(track_index, device_index, parameter_index, value)
                         
                         # Put the result in the queue
                         response_queue.put({"status": "success", "result": result})
@@ -320,6 +321,7 @@ class AbletonMCP(ControlSurface):
                 except queue.Empty:
                     response["status"] = "error"
                     response["message"] = "Timeout waiting for operation to complete"
+            
             elif command_type == "get_browser_item":
                 uri = params.get("uri", None)
                 path = params.get("path", None)
@@ -331,6 +333,7 @@ class AbletonMCP(ControlSurface):
                 path = params.get("path", "")
                 item_type = params.get("item_type", "all")
                 response["result"] = self._get_browser_items(path, item_type)
+            
             # Add the new browser commands
             elif command_type == "get_browser_tree":
                 category_type = params.get("category_type", "all")
@@ -341,6 +344,7 @@ class AbletonMCP(ControlSurface):
             else:
                 response["status"] = "error"
                 response["message"] = "Unknown command: " + command_type
+        
         except Exception as e:
             self.log_message("Error processing command: " + str(e))
             self.log_message(traceback.format_exc())
@@ -401,25 +405,25 @@ class AbletonMCP(ControlSurface):
             # Get devices
             devices = []
             for device_index, device in enumerate(track.devices):
-                devices.append({
-                    "index": device_index,
-                    "name": device.name,
-                    "class_name": device.class_name,
-                    "type": self._get_device_type(device)
-                })
 
-            # Get device parameters
-            device_parameters = []
-            for device in track.devices:
-                for parameter in device.parameters:
-                    device_parameters.append({
+                #Get device parameters
+                parameters = []
+                for parameter_index, parameter in enumerate(device.parameters):
+                    parameters.append({
+                        "index": parameter_index,
                         "name": parameter.name,
                         "value": parameter.value,
                         "min": parameter.min,
                         "max": parameter.max,
-                        "default": parameter.default,
-                        "unit": parameter.unit
                     })
+
+                devices.append({
+                    "index": device_index,
+                    "name": device.name,
+                    "class_name": device.class_name,
+                    "type": self._get_device_type(device),
+                    "parameters": parameters
+                })
 
             result = {
                 "index": track_index,
@@ -432,8 +436,7 @@ class AbletonMCP(ControlSurface):
                 "volume": track.mixer_device.volume.value,
                 "panning": track.mixer_device.panning.value,
                 "clip_slots": clip_slots,
-                "devices": devices,
-                "device_parameters": device_parameters
+                "devices": devices
             }
             return result
         except Exception as e:
@@ -824,39 +827,39 @@ class AbletonMCP(ControlSurface):
         except Exception as e:
             self.log_message("Error finding browser item by URI: {0}".format(str(e)))
             return None
-
-    def _get_parameter_value(self, track_index, device_index, parameter_name):
+        
+    def _get_parameter_value(self, track_index, device_index, parameter_index):
         """Get the value of a device parameter"""
         try:
             if track_index < 0 or track_index >= len(self._song.tracks):
-                raise IndexError("Track index out of range")
-
+                raise IndexError("Track index out of range")    
+            
             track = self._song.tracks[track_index]
 
             if device_index < 0 or device_index >= len(track.devices):
                 raise IndexError("Device index out of range")
 
-            device = track.devices[device_index]
+            device = track.devices[device_index]    
 
-            if parameter_name not in device.parameters:
-                raise ValueError("Parameter '{0}' not found on device".format(parameter_name))
+            if parameter_index < 0 or parameter_index >= len(device.parameters):
+                raise ValueError("Parameter index out of range")
 
-            value = device.parameters[parameter_name].value
+            value = device.parameters[parameter_index].value
 
             result = {
-                "parameter_name": parameter_name,
+                "parameter_index": parameter_index,
                 "value": value,
-                "min": device.parameters[parameter_name].min,
-                "max": device.parameters[parameter_name].max,
-                "default": device.parameters[parameter_name].default,
-                "unit": device.parameters[parameter_name].unit
+                "min": device.parameters[parameter_index].min,
+                "max": device.parameters[parameter_index].max,
+                "default": device.parameters[parameter_index].default,
+                "unit": device.parameters[parameter_index].unit
             }
             return result
         except Exception as e:
-            self.log_message("Error getting device parameter: {0}".format(str(e)))
+            self.log_message("Error getting parameter value: {0}".format(str(e)))
             raise
         
-    def _set_parameter_value(self, track_index, device_index, parameter_name, value):  
+    def _set_parameter_value(self, track_index, device_index, parameter_index, value):  
         """Set the value of a device parameter"""
         try:
             if track_index < 0 or track_index >= len(self._song.tracks):
@@ -869,13 +872,13 @@ class AbletonMCP(ControlSurface):
 
             device = track.devices[device_index]
 
-            if parameter_name not in device.parameters:
-                raise ValueError("Parameter '{0}' not found on device".format(parameter_name))
+            if parameter_index < 0 or parameter_index >= len(device.parameters):
+                raise ValueError("Parameter index out of range")
 
-            device.parameters[parameter_name].value = value
+            device.parameters[parameter_index].value = value
 
             result = {
-                "parameter_name": parameter_name,
+                "parameter_index": parameter_index,
                 "value": value
             }
             return result
